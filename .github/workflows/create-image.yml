@@ -101,8 +101,8 @@ jobs:
 
       - name: Print Quay.io info
         run: |
-          echo "### ${{ env.IMAGE_REGISTRY }} login" >>  $GITHUB_STEP_SUMMARY
-          echo "* Logging into [${{ env.IMAGE_REGISTRY }}]... >>  $GITHUB_STEP_SUMMARY
+          echo "### ${{ env.IMAGE_REGISTRY }} info" >>  $GITHUB_STEP_SUMMARY
+          echo "* Logging into [${{ env.IMAGE_REGISTRY }}]..."" >>  $GITHUB_STEP_SUMMARY
 
       - name: Log in to Quay.io
         uses: redhat-actions/podman-login@v1
