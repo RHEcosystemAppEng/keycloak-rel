@@ -31,6 +31,7 @@ env:
   REPO_OWNER: ${{ vars.REPO_OWNER }}
   REPO_BRANCH: ${{ vars.REPO_BRANCH }}
   REPO_NAME: ${{ vars.REPO_NAME }}
+  TAG_LATEST: base-image-latest
 
 
 jobs:
@@ -69,22 +70,42 @@ jobs:
           echo "GIT_STATUS_N_REMOTE=${{ env.GIT_STATUS_N_REMOTE }}"
           echo "KEYCLOAK_22_TAG=${{ env.KEYCLOAK_22_TAG }}"
 
-      # - name: Build with Maven - skipping all the tests
-      #   run: mvn clean install -DskipTestsuite -DskipExamples -DskipTests
+      - name: Build with Maven - skipping all the tests
+        run: mvn clean install -DskipTestsuite -DskipExamples -DskipTests
 
       - name: Setup Git Config
         run: |
           git config --global user.email "${{ github.actor_id }}+${{ github.actor }}-github-actions[bot]@users.noreply.github.com"
           git config --global user.name "${{ github.actor }}-github-actions[bot]"
 
-      - name: Create tag
+      - name: Create tags
         run: |
-          git tag -a ${{ env.KEYCLOAK_22_TAG }} -m 'Base image tag'
+          echo "### Tagging the codebase"
+          echo "* Creating tag `${{ env.KEYCLOAK_22_TAG }}` for current run" >>  $GITHUB_STEP_SUMMARY
+          git tag -a ${{ env.KEYCLOAK_22_TAG }} -m 'Base image tag based on current date and time'
+          git tag -f -a ${{ env.TAG_LATEST }} -m 'Base image latest tag'
 
-      - name: Push tag
+      - name: Push tags
         run: |
-          echo "Pushing the newly created git tag - ${{ env.KEYCLOAK_22_TAG }}" >>  $GITHUB_STEP_SUMMARY
-          git push origin refs/tags/${{ env.KEYCLOAK_22_TAG }}
+          echo "* Pushing the newly created git tag `${{ env.KEYCLOAK_22_TAG }}`" >>  $GITHUB_STEP_SUMMARY
+          git push -f origin refs/tags/${{ env.KEYCLOAK_22_TAG }} refs/tags/${{ env.TAG_LATEST }}
+
+      - name: Copy tarfile for building base image
+        working-directory: ./quarkus/container
+        run: |
+          cp ../dist/target/keycloak-${{ env.KEYCLOAK_VERSION }}.tar.gz .
+          echo "* Using `keycloak-${{ env.KEYCLOAK_VERSION }}.tar.gz` to build the base-image" >>  $GITHUB_STEP_SUMMARY
+          echo "Current dir: `pwd`" >> $GITHUB_STEP_SUMMARY
+          ls -l *.gz >> $GITHUB_STEP_SUMMARY
+
+      - name: Print Quay.io login
+        run: |
+          echo "### ${{ env.IMAGE_REGISTRY }} login>>  $GITHUB_STEP_SUMMARY
+          echo "* Logging into `${{ env.IMAGE_REGISTRY }}`... >>  $GITHUB_STEP_SUMMARY
+
+      - name: Print base-image tag info
+        run: |
+          echo "Using tag ${{ env.KEYCLOAK_22_TAG }} to create the base-image" >> $GITHUB_STEP_SUMMARY
 
       - name: Log in to Quay.io
         uses: redhat-actions/podman-login@v1
@@ -92,17 +113,6 @@ jobs:
           username: ${{ env.REGISTRY_USER }}
           password: ${{ env.REGISTRY_PASSWORD }}
           registry: ${{ env.IMAGE_REGISTRY }}
-
-      # - name: Copy tarfile for building base image
-      #   working-directory: ./quarkus/container
-      #   run: |
-      #     cp ../dist/target/keycloak-${{ env.KEYCLOAK_VERSION }}.tar.gz .
-      #     echo "Current dir: `pwd`" >> $GITHUB_STEP_SUMMARY
-      #     ls -l *.gz >> $GITHUB_STEP_SUMMARY
-
-      - name: Print base-image tag info
-        run: |
-          echo "Using tag ${{ env.KEYCLOAK_22_TAG }} to create the base-image" >> $GITHUB_STEP_SUMMARY
 
       # - name: Build base-image from source
       #   id: build_base_image
