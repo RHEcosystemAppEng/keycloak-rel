@@ -1,0 +1,136 @@
+# This action requires following configuration variables/secrets:
+#  Secrets:
+#   - QUAY_PASS
+#  Variables:
+#   - IMAGE_NAME
+#   - IMAGE_TAG
+#   - KEYCLOAK_VERSION
+#   - QUAY_USER
+#   - REPO_BRANCH
+#   - REPO_NAME
+#   - REPO_OWNER
+
+
+name: build_n_push-image-on-demand
+
+run-name: Build and push base-image on demand - ${{ github.actor }}
+
+on: [push, workflow_dispatch]
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  IMAGE_REGISTRY: quay.io
+  IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+  IMAGE_TAG: ${{ vars.IMAGE_TAG }}
+  KEYCLOAK_VERSION: ${{ vars.KEYCLOAK_VERSION }}
+  REGISTRY_PASSWORD: ${{ secrets.QUAY_PASS }}
+  REGISTRY_USER: ${{ vars.QUAY_USER }}
+  REPO_OWNER: ${{ vars.REPO_OWNER }}
+  REPO_BRANCH: ${{ vars.REPO_BRANCH }}
+  REPO_NAME: ${{ vars.REPO_NAME }}
+
+
+jobs:
+  build-keycloak-base-image:
+    runs-on: ubuntu-latest
+    environment: fips
+
+    steps:
+      - name: Setup JDK 20
+        uses: actions/setup-java@v3
+        with:
+          java-version: '20'
+          distribution: 'temurin'
+
+      - name: Checkout Keycloak 22 branch
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.REPO_OWNER }}/${{ env.REPO_NAME }}
+          ref: keycloak-22
+          token: ${{ secrets.ACTIONS_PAT }}
+
+      - name: Get status and remote
+        run: |
+          status="$(git status)"
+          remote="$(git remote -v)"
+          echo "GIT_STATUS_N_REMOTE<<EOF" >> $GITHUB_ENV
+          echo "status=${status}" >> $GITHUB_ENV
+          echo "remote=${remote}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          tag="$( echo base-image-`date +"%Y-%m-%d_%H_%M_%S"`-${{ github.run_id }} )"
+          echo "KEYCLOAK_22_TAG=${tag}" >> $GITHUB_ENV
+
+      - name: Print git status and remote
+        run: |
+          echo "GIT_STATUS_N_REMOTE=${{ env.GIT_STATUS_N_REMOTE }}"
+          echo "KEYCLOAK_22_TAG=${{ env.KEYCLOAK_22_TAG }}"
+
+      # - name: Build with Maven - skipping all the tests
+      #   run: mvn clean install -DskipTestsuite -DskipExamples -DskipTests
+
+      - name: Setup Git Config
+        run: |
+          git config --global user.email "${{ github.actor_id }}+${{ github.actor }}-github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "${{ github.actor }}-github-actions[bot]"
+
+      - name: Create tag
+        run: |
+          git tag -a ${{ env.KEYCLOAK_22_TAG }} -m 'Base image tag'
+
+      - name: Push tag
+        run: |
+          echo "Pushing the newly created git tag - ${{ env.KEYCLOAK_22_TAG }}" >>  $GITHUB_STEP_SUMMARY
+          git push origin refs/tags/${{ env.KEYCLOAK_22_TAG }}
+
+      - name: Log in to Quay.io
+        uses: redhat-actions/podman-login@v1
+        with:
+          username: ${{ env.REGISTRY_USER }}
+          password: ${{ env.REGISTRY_PASSWORD }}
+          registry: ${{ env.IMAGE_REGISTRY }}
+
+      # - name: Copy tarfile for building base image
+      #   working-directory: ./quarkus/container
+      #   run: |
+      #     cp ../dist/target/keycloak-${{ env.KEYCLOAK_VERSION }}.tar.gz .
+      #     echo "Current dir: `pwd`" >> $GITHUB_STEP_SUMMARY
+      #     ls -l *.gz >> $GITHUB_STEP_SUMMARY
+
+      - name: Print base-image tag info
+        run: |
+          echo "Using tag ${{ env.KEYCLOAK_22_TAG }} to create the base-image" >> $GITHUB_STEP_SUMMARY
+
+      # - name: Build base-image from source
+      #   id: build_base_image
+      #   uses: redhat-actions/buildah-build@v2
+      #   with:
+      #     image: ${{ env.IMAGE_NAME }}
+      #     tags: ${{ env.IMAGE_TAG }}
+      #     context: ./quarkus/container
+      #     containerfiles: |
+      #       ./quarkus/container/Dockerfile
+      #     build-args: |
+      #       KEYCLOAK_DIST=keycloak-${{ env.KEYCLOAK_VERSION }}.tar.gz
+
+      # - name: Print base-image build info
+      #   run: |
+      #     echo "Built Keycloak-22 image - ${{ steps.build_base_image.outputs.image-with-tag }}" >>  $GITHUB_STEP_SUMMARY
+
+      # - name: Push base-image
+      #   id: push_base_image
+      #   uses: redhat-actions/push-to-registry@v2
+      #   with:
+      #     image: ${{ steps.build_base_image.outputs.image }}
+      #     tags: ${{ steps.build_base_image.outputs.tags }}
+      #     registry: ${{ env.IMAGE_REGISTRY }}/${{ env.REGISTRY_USER }}
+
+      # - name: Print base-image info
+      #   run: |
+      #     echo "Pushed Keycloak-22 image to ${{ env.IMAGE_REGISTRY }}" >>  $GITHUB_STEP_SUMMARY
+      #     echo "Image info:" >>  $GITHUB_STEP_SUMMARY
+      #     echo "  - path: ${{ steps.push_base_image.outputs.registry-paths }}" >>  $GITHUB_STEP_SUMMARY
+      #     echo "  - digest: ${{ steps.push_base_image.outputs.digest }}" >>  $GITHUB_STEP_SUMMARY
