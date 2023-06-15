@@ -1,11 +1,13 @@
 # This action requires following configuration variables/secrets:
 #  Secrets:
-#   - QUAY_PASS
+#   - QUAY_PASS           <- quay.io login uses this password
+#   - ACTIONS_PAT         <- used for performing push operations on the source repo
 #  Variables:
 #   - IMAGE_NAME
 #   - IMAGE_TAG
-#   - KEYCLOAK_VERSION
-#   - QUAY_USER
+#   - KEYCLOAK_VERSION    <- keycloak build results in a tarball with this version
+#   - QUAY_USER           <- quay.io login uses this user
+#   - QUAY_REPO_OWNER     <- image will be pushed to the repo owned by this user/org
 #   - REPO_BRANCH
 #   - REPO_NAME
 #   - REPO_OWNER
@@ -28,6 +30,7 @@ env:
   KEYCLOAK_VERSION: ${{ vars.KEYCLOAK_VERSION }}
   REGISTRY_PASSWORD: ${{ secrets.QUAY_PASS }}
   REGISTRY_USER: ${{ vars.QUAY_USER }}
+  REGISTRY_REPO_OWNER: ${{ vars.QUAY_REPO_OWNER }}
   REPO_OWNER: ${{ vars.REPO_OWNER }}
   REPO_BRANCH: ${{ vars.REPO_BRANCH }}
   REPO_NAME: ${{ vars.REPO_NAME }}
@@ -81,7 +84,7 @@ jobs:
       - name: Create tags
         run: |
           echo "### Tagging the codebase" >>  $GITHUB_STEP_SUMMARY
-          echo "* Creating tag [${{ env.KEYCLOAK_22_TAG }}] for current run" >>  $GITHUB_STEP_SUMMARY
+          echo "* Creating tags [${{ env.KEYCLOAK_22_TAG }} and ${{ env.TAG_LATEST }}] for current run" >>  $GITHUB_STEP_SUMMARY
           git tag -a ${{ env.KEYCLOAK_22_TAG }} -m 'Base image tag based on current date and time'
           git tag -f -a ${{ env.TAG_LATEST }} -m 'Base image latest tag'
           echo "* Using tags [${{ env.KEYCLOAK_22_TAG }} and ${{ env.TAG_LATEST }}] to create the base-image" >> $GITHUB_STEP_SUMMARY
@@ -133,12 +136,12 @@ jobs:
         with:
           image: ${{ steps.build_base_image.outputs.image }}
           tags: ${{ steps.build_base_image.outputs.tags }}
-          registry: ${{ env.IMAGE_REGISTRY }}/${{ env.REGISTRY_USER }}
+          registry: ${{ env.IMAGE_REGISTRY }}/${{ env.REPO_OWNER }}
 
       - name: Print base-image info
         run: |
           echo "* Pushed Keycloak-22 image to ${{ env.IMAGE_REGISTRY }}" >>  $GITHUB_STEP_SUMMARY
           echo "* Image info:" >>  $GITHUB_STEP_SUMMARY
-          echo "  ** path: ${{ steps.push_base_image.outputs.registry-paths }}" >>  $GITHUB_STEP_SUMMARY
-          echo "  ** digest: ${{ steps.push_base_image.outputs.digest }}" >>  $GITHUB_STEP_SUMMARY
+          echo "  * path: ${{ steps.push_base_image.outputs.registry-paths }}" >>  $GITHUB_STEP_SUMMARY
+          echo "  * digest: ${{ steps.push_base_image.outputs.digest }}" >>  $GITHUB_STEP_SUMMARY
 
