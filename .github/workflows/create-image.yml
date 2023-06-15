@@ -136,7 +136,7 @@ jobs:
         with:
           image: ${{ steps.build_base_image.outputs.image }}
           tags: ${{ steps.build_base_image.outputs.tags }}
-          registry: ${{ env.IMAGE_REGISTRY }}/${{ env.REPO_OWNER }}
+          registry: ${{ env.IMAGE_REGISTRY }}/${{ env.REGISTRY_REPO_OWNER }}
 
       - name: Print base-image info
         run: |
