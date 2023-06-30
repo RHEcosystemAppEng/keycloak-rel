@@ -3,6 +3,8 @@
 #   - QUAY_PASS           <- quay.io login uses this password
 #   - ACTIONS_PAT         <- used for performing push operations on the source repo
 #  Variables:
+#   - CREATE_IMAGE_NOTIFIERS  <- email notification will be sent to everyone listed in this list (each entry separated by comma)
+#   - EMAIL_SENDER_NAME
 #   - IMAGE_NAME
 #   - IMAGE_TAG
 #   - KEYCLOAK_VERSION    <- keycloak build results in a tarball with this version
@@ -11,6 +13,8 @@
 #   - REPO_BRANCH
 #   - REPO_NAME
 #   - REPO_OWNER
+#   - WORKFLOW_USER_SUFFIX
+#   - WORKFLOW_EMAIL_DOMAIN
 
 
 name: build_n_push-image-on-demand
@@ -24,6 +28,8 @@ defaults:
     shell: bash
 
 env:
+  EMAIL_SENDER: ${{ vars.EMAIL_SENDER_NAME }}
+  EMAIL_SEND_TO_LIST: ${{ vars.CREATE_IMAGE_NOTIFIERS }}
   IMAGE_REGISTRY: quay.io
   IMAGE_NAME: ${{ vars.IMAGE_NAME }}
   IMAGE_TAG: ${{ vars.IMAGE_TAG }}
@@ -35,6 +41,8 @@ env:
   REPO_BRANCH: ${{ vars.REPO_BRANCH }}
   REPO_NAME: ${{ vars.REPO_NAME }}
   TAG_LATEST: base-image-latest
+  WORKFLOW_USER: "${{ github.actor }}${{ vars.WORKFLOW_USER_SUFFIX }}"
+  WORKFLOW_EMAIL: "${{ github.actor }}${{ vars.WORKFLOW_USER_SUFFIX }}@${{ vars.WORKFLOW_EMAIL_DOMAIN }}"
 
 
 jobs:
@@ -78,8 +86,8 @@ jobs:
 
       - name: Setup Git Config
         run: |
-          git config --global user.email "${{ github.actor_id }}+${{ github.actor }}-github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "${{ github.actor }}-github-actions[bot]"
+          git config --global user.email "${{ github.actor_id }}+${{ env.WORKFLOW_EMAIL }}"
+          git config --global user.name "${{ env.WORKFLOW_USER }}"
 
       - name: Create tags
         run: |
@@ -145,3 +153,22 @@ jobs:
           echo "  * path: ${{ steps.push_base_image.outputs.registry-paths }}" >>  $GITHUB_STEP_SUMMARY
           echo "  * digest: ${{ steps.push_base_image.outputs.digest }}" >>  $GITHUB_STEP_SUMMARY
 
+      - name: Send email with base-image info
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USER }}
+          password: ${{ secrets.MAIL_PASS }}
+          subject: ${{ github.job }} - new Keycloak base-image is available
+          to: ${{ env.EMAIL_SEND_TO_LIST }}
+          from: ${{ env.EMAIL_SENDER }}
+          reply_to: ${{ env.WORKFLOW_EMAIL }}
+          html_body: |
+            Workflow ${{ github.job }} of ${{github.repository}} triggered by ${{ github.actor }} has successfully built and pushed a new Keycloak base-image.
+
+            New base-image information is given below:
+              * Registry: ${{ env.IMAGE_REGISTRY }}
+              * Path: ${{ steps.push_base_image.outputs.registry-paths }}
+              * Digest: ${{ steps.push_base_image.outputs.digest }}
+          convert_markdown: true
