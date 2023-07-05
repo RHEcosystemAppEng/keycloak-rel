@@ -55,7 +55,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '17'
-          distribution: 'zulu'
+          distribution: 'temurin'
 
       - name: Checkout Keycloak 22 branch
         uses: actions/checkout@v3
